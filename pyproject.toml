@@ -6,11 +6,17 @@ dependencies = [
     "mcp",
     "requests",
 ]
+# --- DÒNG SỬA LỖI ---
+# Thêm dòng này để báo cho trình build biết
+# cần cài đặt cả hai file .py này làm mô-đun
+py-modules = ["mcp_zingmp3", "zmp3"]
+# --- KẾT THÚC SỬA LỖI ---
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-# Đây là lệnh mà uvx sẽ gọi
+# Dòng này giờ sẽ hoạt động vì "mcp_zingmp3"
+# đã được cài đặt như một mô-đun
 mcp-zingmp3 = "mcp_zingmp3:main"
