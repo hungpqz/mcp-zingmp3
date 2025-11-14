@@ -1,5 +1,5 @@
 # File: mcp_zingmp3.py
-# PHIÊN BẢN TEST (FIX CỨNG) - SỬ DỤNG CLOUDSCRAPER
+# PHIÊN BẢN HOÀN CHỈNH - GỘP + FIX CỨNG + CLOUDSCRAPER + FIX SIGNATURE
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
@@ -9,9 +9,8 @@ import json
 import sys
 from typing import List, Dict, Any
 
-# --- THAY ĐỔI QUAN TRỌNG ---
-import cloudscraper # Import thư viện mới
-# --- KẾT THÚC THAY ĐỔI ---
+# Import thư viện cloudscraper
+import cloudscraper 
 
 # ===================================================================
 # NỘI DUNG TỪ zmp3.py
@@ -22,6 +21,7 @@ from urllib.parse import quote
 URL = "https://zingmp3.vn"
 
 # --- Logic tải cấu hình (ĐÃ FIX CỨNG) ---
+# CÁC KHÓA BÍ MẬT CỦA BẠN ĐƯỢC GHI TRỰC TIẾP TẠI ĐÂY
 try:
     version = "1.16.5"
     akey = "X5BM3w8N7MKozC0B85o4KMlzLZKhV00y"
@@ -36,23 +36,20 @@ except Exception as e:
 
 # --- Kết thúc logic tải cấu hình ---
 
-p = {"ctime", "id", "type", "page", "count", "version"}
-
-# --- THAY ĐỔI QUAN TRỌNG ---
-# session, _cookie = requests.Session(), None # Dòng cũ
-session = cloudscraper.create_scraper() # Dòng mới
+# Khởi tạo session bằng cloudscraper
+session = cloudscraper.create_scraper() 
 _cookie = None
-# User-Agent đã được cloudscraper xử lý, không cần thêm thủ công
-# --- KẾT THÚC THAY ĐỔI ---
-
 
 # utils
 def hash256(s): return hashlib.sha256(s.encode()).hexdigest()
 def hmac512(s, key): return hmac.new(key.encode(), s.encode(), hashlib.sha512).hexdigest()
 
+# === SỬA LỖI SIGNATURE ===
+# Hàm str_params đã được sửa, KHÔNG LỌC theo danh sách 'p' nữa
 def str_params(params):
     return "".join(f"{quote(k)}={quote(str(v))}" for k, v in sorted(params.items()) if v not in [None, ""] and len(str(v)) <= 5000)
-    
+# === KẾT THÚC SỬA LỖI ===
+
 def get_sig(path, params): 
     return hmac512(path + hash256(str_params(params)), skey)
 
@@ -66,15 +63,16 @@ def get_cookie(force=False):
 
 def zingmp3(path, extra=None):
     now = str(int(time.time()))
+    # apiKey PHẢI được thêm vào params để tạo chữ ký đúng
     params = {"ctime": now, "version": version, "apiKey": akey, **(extra or {})}
+    # Tạo chữ ký (signature)
     params["sig"] = get_sig(path, params)
     
-    # --- THAY ĐỔI NHỎ ---
-    # Lấy cookie trước, vì nó có thể cần để vượt qua Cloudflare
+    # Lấy cookie
     cookie_header = get_cookie()
     headers = {"Cookie": cookie_header} if cookie_header else {}
-    # --- KẾT THÚC THAY ĐỔI ---
     
+    # session.get là của cloudscraper
     return session.get(f"{URL}{path}", headers=headers, params=params, timeout=10).json()
 
 # api
@@ -85,7 +83,7 @@ get_stream = lambda song_id: zingmp3("/api/v2/song/get/streaming", {"id": song_i
 get_lyric = lambda song_id: zingmp3("/api/v2/lyric/get/lyric", {"id": song_id})
 
 # ===================================================================
-# NỘI DUNG TỪ mcp_zingmp3.py (Phần còn lại giữ nguyên)
+# NỘI DUNG TỪ mcp_zingmp3.py (Phần còn lại)
 # ===================================================================
 
 # --- HÀM HỖ TRỢ PHÂN TÍCH LYRIC ---
@@ -116,13 +114,17 @@ def parse_lrc_to_json(lrc_content: str) -> List[Dict[str, Any]]:
 # --- KẾT THÚC HÀM HỖ TRỢ ---
 
 # Khởi tạo máy chủ MCP
-server = FastMCP("zingmp3-tools-hardcoded-cscraper")
+server = FastMCP("zingmp3-tools-final")
 
 @server.tool()
 def search_zing_songs(query: str, count: int = 5) -> List[Dict[str, str]]:
+    """
+    Tìm kiếm bài hát trên Zing MP3.
+    Trả về một danh sách các bài hát khớp với từ khóa.
+    """
     try:
         search_data = search_song(query, count=count) 
-        if search_data.get("err", 0) != 0: # Kiểm tra lỗi API
+        if search_data.get("err", 0) != 0:
              print(f"Lỗi API khi tìm kiếm: {search_data.get('msg')}", file=sys.stderr)
              return []
         if not search_data.get("data") or not search_data["data"].get("items"):
@@ -144,10 +146,15 @@ def search_zing_songs(query: str, count: int = 5) -> List[Dict[str, str]]:
 
 @server.tool()
 def get_zing_song_details(song_id: str) -> Dict[str, Any]:
+    """
+    Lấy thông tin chi tiết, link stream 128kbps và lời bài hát (dạng JSON)
+    cho một song_id cụ thể của Zing MP3.
+    """
     if not song_id:
         return {"error": "Thiếu song_id"}
 
     try:
+        # 1. LẤY THÔNG TIN BÀI HÁT (API NÀY CẦN CHỮ KÝ ĐÚNG)
         song_info = get_song(song_id)
         if song_info.get("err") != 0:
             return {"error": song_info.get("msg", "Lỗi khi lấy thông tin bài hát")}
@@ -156,8 +163,9 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
         composers = data.get("composers", [])
         author_names = ", ".join([c["name"] for c in composers if c.get("name")]) or "Không rõ"
 
+        # 2. LẤY STREAM (API NÀY CẦN CHỮ KÝ ĐÚNG)
         stream_info = get_stream(song_id)
-        if stream_info.get("err") != 0: # Kiểm tra lỗi API
+        if stream_info.get("err") != 0:
              print(f"Lỗi API khi lấy stream: {stream_info.get('msg')}", file=sys.stderr)
              stream_url = f"Không thể lấy link (Lỗi: {stream_info.get('msg')})"
         else:
@@ -167,6 +175,7 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
             elif stream_url == "VIP":
                 stream_url = "Đây là bài hát VIP, cần tài khoản Premium."
 
+        # 3. LẤY LYRIC (API NÀY CẦN CHỮ KÝ ĐÚNG)
         lyric_info = get_lyric(song_id)
         lyric_json = []
         
@@ -203,7 +212,7 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
 
 def main():
     """Hàm main để chạy server."""
-    print("Đang khởi động Zing MP3 MCP Server (PHIÊN BẢN FIX CỨNG VỚI CLOUDSCRAPER)...")
+    print("Đang khởi động Zing MP3 MCP Server (Phiên bản GỘP, FIX CỨNG, CLOUDSCRAPER, FIX SIGNATURE)...")
     server.run()
 
 if __name__ == "__main__":
