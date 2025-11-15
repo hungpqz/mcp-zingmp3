@@ -1,6 +1,5 @@
 # File: mcp_zingmp3.py
-# PHIÊN BẢN HOÀN CHỈNH - GỘP + FIX CỨNG + CLOUDSCRAPER
-# Đã xác nhận các hàm con hoạt động
+# PHIÊN BẢN MỞ RỘNG: Bao gồm Zing MP3 (fix cứng) VÀ YouTube Music
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
@@ -10,11 +9,21 @@ import json
 import sys
 from typing import List, Dict, Any
 
-# Import thư viện cloudscraper
+# Import thư viện cloudscraper (cho Zing)
 import cloudscraper 
 
+# --- THÊM IMPORT CHO YOUTUBE MUSIC ---
+try:
+    from ytmusicapi import YTMusic
+    from pytube import YouTube
+except ImportError:
+    print("LỖI NGHIÊM TRỌNG: Không tìm thấy thư viện ytmusicapi hoặc pytube.", file=sys.stderr)
+    print("Hãy đảm bảo pyproject.toml đã bao gồm 'ytmusicapi' và 'pytube'", file=sys.stderr)
+    sys.exit(1)
+# --- KẾT THÚC IMPORT MỚI ---
+
 # ===================================================================
-# NỘI DUNG TỪ zmp3.py
+# NỘI DUNG TỪ zmp3.py (LOGIC CỦA ZING MP3)
 # ===================================================================
 import time, hashlib, hmac, os
 from urllib.parse import quote
@@ -31,19 +40,26 @@ try:
         raise ValueError("Giá trị fix cứng bị thiếu")
 
 except Exception as e:
-    print(f"LỖI NGHIÊM TRỌNG: Không thể tải cấu hình fix cứng: {e}", file=sys.stderr)
+    print(f"LỖI NGHIÊM TRỌNG: Không thể tải cấu hình fix cứng Zing: {e}", file=sys.stderr)
     sys.exit(1)
 # --- Kết thúc logic tải cấu hình ---
 
-# --- LOGIC SIGNATURE GỐC ---
+# --- LOGIC SIGNATURE GỐC (CHO ZING) ---
 p = {"ctime", "id", "type", "page", "count", "version"}
 # --- KẾT THÚC LOGIC SIG ---
 
-# Khởi tạo session bằng cloudscraper
+# Khởi tạo session bằng cloudscraper (CHO ZING)
 session = cloudscraper.create_scraper() 
 _cookie = None
 
-# utils
+# Khởi tạo YTMusic (CHO YOUTUBE)
+try:
+    ytmusic = YTMusic()
+except Exception as e:
+    print(f"LỖI: Không thể khởi tạo YTMusic: {e}", file=sys.stderr)
+    # Có thể tiếp tục chạy mà không có YTMusic, các công cụ Zing vẫn hoạt động
+
+# utils (CHO ZING)
 def hash256(s): return hashlib.sha256(s.encode()).hexdigest()
 def hmac512(s, key): return hmac.new(key.encode(), s.encode(), hashlib.sha512).hexdigest()
 
@@ -68,7 +84,7 @@ def zingmp3(path, extra=None):
     headers = {"Cookie": cookie_header} if cookie_header else {}
     return session.get(f"{URL}{path}", headers=headers, params=params, timeout=10).json()
 
-# api
+# api (CHO ZING)
 chart_home = lambda: zingmp3("/api/v2/page/get/chart-home")
 search_song = lambda q, count=10: zingmp3("/api/v2/search", {"q": q, "type": "song", "count": count, "allowCorrect": 1})
 get_song = lambda song_id: zingmp3("/api/v2/song/get/info", {"id": song_id})
@@ -79,7 +95,7 @@ get_lyric = lambda song_id: zingmp3("/api/v2/lyric/get/lyric", {"id": song_id})
 # NỘI DUNG TỪ mcp_zingmp3.py (Phần còn lại)
 # ===================================================================
 
-# --- HÀM HỖ TRỢ PHÂN TÍCH LYRIC ---
+# --- HÀM HỖ TRỢ PHÂN TÍCH LYRIC (CHO ZING) ---
 def parse_lrc_to_json(lrc_content: str) -> List[Dict[str, Any]]:
     lines_json = []
     lrc_line_regex = re.compile(r'\[(\d{2}):(\d{2})[.:]?(\d{2,3})?\](.*)')
@@ -107,7 +123,11 @@ def parse_lrc_to_json(lrc_content: str) -> List[Dict[str, Any]]:
 # --- KẾT THÚC HÀM HỖ TRỢ ---
 
 # Khởi tạo máy chủ MCP
-server = FastMCP("zingmp3-tools-final")
+server = FastMCP("music-tools-server") # Đổi tên server
+
+# ===================================================================
+# === CÔNG CỤ ZING MP3 (GIỮ NGUYÊN) ===
+# ===================================================================
 
 @server.tool()
 def search_zing_songs(query: str, count: int = 5) -> List[Dict[str, str]]:
@@ -118,7 +138,7 @@ def search_zing_songs(query: str, count: int = 5) -> List[Dict[str, str]]:
     try:
         search_data = search_song(query, count=count) 
         if search_data.get("err", 0) != 0:
-             print(f"Lỗi API khi tìm kiếm: {search_data.get('msg')}", file=sys.stderr)
+             print(f"Lỗi API Zing khi tìm kiếm: {search_data.get('msg')}", file=sys.stderr)
              return []
         if not search_data.get("data") or not search_data["data"].get("items"):
             return []
@@ -159,7 +179,7 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
         # 2. LẤY STREAM
         stream_info = get_stream(song_id)
         if stream_info.get("err") != 0:
-             print(f"Lỗi API khi lấy stream: {stream_info.get('msg')}", file=sys.stderr)
+             print(f"Lỗi API Zing khi lấy stream: {stream_info.get('msg')}", file=sys.stderr)
              stream_url = f"Không thể lấy link (Lỗi: {stream_info.get('msg')})"
         else:
             stream_url = stream_info.get("data", {}).get("128")
@@ -184,7 +204,7 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
                         lrc_content = resp.text
                         lyric_json = parse_lrc_to_json(lrc_content)
                 except Exception as e:
-                    print(f"Lỗi khi phân tích file LRC: {e}", file=sys.stderr)
+                    print(f"Lỗi khi phân tích file LRC (Zing): {e}", file=sys.stderr)
 
         full_details = {
             "id": data.get("encodeId"),
@@ -193,20 +213,90 @@ def get_zing_song_details(song_id: str) -> Dict[str, Any]:
             "author": author_names,
             "thumbnail": data.get("thumbnailM"),
             "stream_url": stream_url,
-            "lyric": lyric_json
+            "lyric_json": lyric_json # Trả về lyric dạng JSON
         }
         
         return full_details
 
     except Exception as e:
-        print(f"Lỗi khi lấy chi tiết bài hát: {e}", file=sys.stderr)
+        print(f"Lỗi khi lấy chi tiết Zing: {e}", file=sys.stderr)
         return {"error": str(e)}
 
-# === KHÔNG CÒN CÁC HÀM TEST GỠ LỖI ===
+# ===================================================================
+# === CÔNG CỤ YOUTUBE MUSIC MỚI ===
+# ===================================================================
+
+@server.tool()
+def search_youtube_music(query: str, count: int = 5) -> List[Dict[str, str]]:
+    """
+    Tìm kiếm bài hát trên YouTube Music.
+    Trả về một danh sách các bài hát khớp với từ khóa.
+    """
+    global ytmusic
+    if 'ytmusic' not in globals():
+        return [{"error": "Thư viện YTMusic chưa được khởi tạo"}]
+
+    try:
+        # Chỉ tìm kiếm bài hát (songs)
+        search_results = ytmusic.search(query=query, filter='songs', limit=count)
+        
+        results = []
+        for song in search_results:
+            # Lấy tên các nghệ sĩ
+            artists = ", ".join([artist['name'] for artist in song.get('artists', [])])
+            
+            results.append({
+                "id": song.get('videoId'),
+                "title": song.get('title'),
+                "artists": artists,
+                "album": song.get('album', {}).get('name'),
+                "duration": song.get('duration'),
+                "thumbnail": song.get('thumbnails', [{}])[0].get('url') # Lấy thumbnail đầu tiên
+            })
+        return results
+    except Exception as e:
+        print(f"Lỗi khi tìm kiếm YouTube Music: {e}", file=sys.stderr)
+        return [{"error": str(e)}]
+
+@server.tool()
+def get_youtube_music_stream(video_id: str) -> Dict[str, Any]:
+    """
+    Lấy link stream (chỉ audio) cho một video_id từ YouTube.
+    Sử dụng thư viện pytube.
+    """
+    if not video_id:
+        return {"error": "Thiếu video_id"}
+
+    try:
+        video_url = f'https://www.youtube.com/watch?v={video_id}'
+        yt = YouTube(video_url)
+        
+        # Lọc các stream chỉ có audio, và lấy stream có bitrate cao nhất
+        audio_stream = yt.streams.filter(only_audio=True).order_by('abr').desc().first()
+        
+        if audio_stream:
+            return {
+                "id": video_id,
+                "title": yt.title,
+                "author": yt.author,
+                "thumbnail": yt.thumbnail_url,
+                "stream_url": audio_stream.url, # URL có thể rất dài và có chữ ký
+                "abr": audio_stream.abr # Audio Bitrate (vd: "128kbps")
+            }
+        else:
+            return {"error": "Không tìm thấy audio stream cho video này."}
+            
+    except Exception as e:
+        print(f"Lỗi khi lấy stream YouTube: {e}", file=sys.stderr)
+        return {"error": str(e)}
+
+# ===================================================================
+# === HÀM MAIN (KHỞI ĐỘNG SERVER) ===
+# ===================================================================
 
 def main():
     """Hàm main để chạy server."""
-    print("Đang khởi động Zing MP3 MCP Server (Phiên bản Cuối cùng, Fix cứng)...")
+    print("Đang khởi động Music MCP Server (Zing + YouTube)...")
     server.run()
 
 if __name__ == "__main__":
