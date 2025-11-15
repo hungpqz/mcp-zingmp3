@@ -1,13 +1,14 @@
 [project]
 name = "mcp-zingmp3"
-version = "0.2.0" # Tăng phiên bản
+version = "0.2.1" # Tăng phiên bản
 description = "MCP server cho Zing MP3 và YouTube Music"
 dependencies = [
     "mcp",
     "requests",
     "cloudscraper",
-    "ytmusicapi",  # <-- THƯ VIỆN MỚI CHO YOUTUBE MUSIC
-    "pytube"       # <-- THƯ VIỆN MỚI ĐỂ LẤY LINK STREAM
+    "ytmusicapi",
+    # "pytube"       # <-- XÓA DÒNG NÀY
+    "yt-dlp"       # <-- THÊM THƯ VIỆN NÀY
 ]
 # Chỉ cần build 1 module duy nhất
 py-modules = ["mcp_zingmp3"]
