@@ -1,14 +1,14 @@
 [project]
 name = "mcp-zingmp3"
-version = "0.2.1" # Tăng phiên bản
-description = "MCP server cho Zing MP3 và YouTube Music"
+version = "0.2.2" # Tăng version nhẹ
+description = "MCP server cho Zing MP3 và YouTube Music (Hỗ trợ tải MP3)"
 dependencies = [
     "mcp",
     "requests",
     "cloudscraper",
     "ytmusicapi",
-    # "pytube"       # <-- XÓA DÒNG NÀY
-    "yt-dlp"       # <-- THÊM THƯ VIỆN NÀY
+    "yt-dlp",
+    "static-ffmpeg" # <-- QUAN TRỌNG: Thư viện tự động cài FFmpeg
 ]
 # Chỉ cần build 1 module duy nhất
 py-modules = ["mcp_zingmp3"]
@@ -18,5 +18,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-# Lệnh này giờ sẽ trỏ đến module mcp_zingmp3 đã được cài
 mcp-zingmp3 = "mcp_zingmp3:main"
