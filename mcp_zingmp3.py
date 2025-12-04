@@ -41,9 +41,9 @@ URL = "https://zingmp3.vn"
 
 # --- Logic tải cấu hình (ĐÃ FIX CỨNG) ---
 try:
-    version = "1.16.5"
-    akey = "X5BM3w8N7MKozC0B85o4KMlzLZKhV00y"
-    skey = "acOrvUS15XRW2o9JksiK1KgQ6Vbds8ZW"
+    version = "1.6.34"
+    akey = "88265e23d4284f25963e6eedac8fbfa3"    
+    skey = "2aa2d1c561e809b267f3638c4a307aab"
     
     if not all([version, akey, skey]):
         raise ValueError("Giá trị fix cứng bị thiếu")
